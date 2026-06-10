@@ -1,0 +1,443 @@
+BEGIN:
+        ; RH = 0
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, CTE
+        0x00
+        MOV [DPTR], ACC
+		;Voy a la dirección donde está RH y le guardo cero
+
+        ; Q-1 = 0
+        MOV ACC, CTE
+        Q1_ADDR
+        MOV DPTR, ACC
+        MOV ACC, CTE
+        0x00
+        MOV [DPTR], ACC      
+		;Voy a la dirección donde está Q-1 y le guardo cero
+
+        ; N = 8
+        MOV ACC, CTE     ; ACC queda con la dirección donde vive N
+        N_ADDR
+        MOV DPTR, ACC    ; DPTR apunta a esa dirección
+        MOV ACC, CTE     ; ACC ahora vale 8
+        0x08
+        MOV [DPTR], ACC   ; guardar 8 en la dirección N_ADDR
+      ; El ciclo se va a repetir 8 veces
+	  
+
+; //////////////////////////////////////////////////////////
+; LOOP PRINCIPAL
+; /////////////////////////////////////////////////////////
+
+LOOP:    ;BOOTH 
+ -............................................---
+        ; ----------------------------------------------------
+        ; Q0 = Q & 0x01         Sacar Ultimo bit de Q
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        0x01
+        MOV A, ACC                  ; A = máscara 0x01
+
+        MOV ACC, CTE
+        Q_ADDR
+        MOV DPTR, ACC 
+        MOV ACC, [DPTR]             ; ACC = Q       ACC = RAM[Q_ADDR]
+
+        AND ACC, A                  ; ACC = Q0    (bien)
+		
+		MOV A, ACC              ; A = ACC(QO)
+
+		MOV DPTR,ACC
+		MOV ACC, [DPTR]
+		
+		
+		
+		MOV ACC, CTE              ;ACC=Q-1
+		Q1_ADDR 
+		MOV DPTR,ACC
+		MOV ACC,[DPTR]
+		
+		XOR ACC,A     ;(10 o 01)
+		JZ
+		SHIFT
+		MOV ACC,A
+	;	AND ACC,A 
+		JZ
+		RADD
+RSUB:
+        ; ACC = M
+        MOV ACC, CTE
+        M_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]
+
+        ; ACC = ~M
+        INV ACC
+
+        ; ACC = ~M + 1
+        MOV A, ACC
+        MOV ACC, CTE
+        0x01
+        ADD ACC,A         ;complemento A2
+
+        ; A = -M
+        MOV A, ACC
+
+        ; ACC = RH
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]
+
+        ; ACC = RH - M
+        ADD ACC, A
+		MOV [DPTR], ACC
+        ; guardar RH
+        
+        JMP 
+		SHIFT
+
+; ============================================================
+; RH = RH + M
+; ============================================================
+
+RADD:
+        ; A = M
+        MOV ACC, CTE
+        M_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]
+        MOV A, ACC
+
+        ; ACC = RH
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]
+
+        ; ACC = RH + M
+        ADD ACC, A
+
+        ; guardar RH
+        MOV A, ACC
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC
+		
+		; TMP_Q = Q >> 1
+
+        JMP 
+			SHIFT
+
+
+; ============================================================
+; SHIFT ARITMETICO SEGUN EL ESQUEMA
+;
+; Q-1 = Q AND 0x01
+; Q = Q >> 1
+; RH0 = RH AND 0x01
+; si RH0 = 1: Q = Q OR 0x80
+; RH7 = RH AND 0x80
+; RH = RH >> 1
+; si RH7 = 1: RH = RH OR 0x80
+; N = N - 1
+; ============================================================
+
+SHIFT:
+        ; ----------------------------------------------------
+        ; 1. Q-1 = Q AND 0x01
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = Q
+
+        MOV A, ACC                  ; A = Q
+
+        MOV ACC, CTE
+        0x01                        ; ACC = 00000001
+
+        AND ACC, A                  ; ACC = Q AND 00000001
+                                    ; 
+									
+									ACC = Q0 viejo
+
+        MOV A, ACC                  ; A = Q0 viejo
+
+        MOV ACC, CTE
+        Q1_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; Q-1 = Q0 viejo
+
+
+        ; ----------------------------------------------------
+        ; 2. TMP_Q = Q >> 1
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = Q
+
+        SLR ACC                     ; ACC = Q >> 1
+
+        MOV A, ACC                  ; A = Q desplazado
+
+        MOV ACC, CTE
+        TMP_Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; TMP_Q = Q >> 1
+
+
+        ; ----------------------------------------------------
+        ; 3. RH0 = RH AND 0x01   (filtro bit menos significativo)
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = RH
+
+        MOV A, ACC                  ; A = RH
+
+        MOV ACC, CTE
+        0x01                        ; ACC = 00000001
+
+        AND ACC, A                  ; ACC = RH AND 00000001
+                                    ; ACC = RH0
+
+        MOV A, ACC                  ; A = RH0
+
+        MOV ACC, CTE
+        RH_LSB_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; RH_LSB = RH0
+
+
+        ; ----------------------------------------------------
+        ; Si RH0 = 1, entonces Q = Q OR 0x80
+        ; En código: TMP_Q = TMP_Q + 0x80
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        RH_LSB_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = RH0
+
+        MOV A, ACC
+        AND ACC, A                  ; actualiza bandera Z
+
+        JZ STORE_Q                  ; si RH0 = 0, no mete 1 en Q
+
+
+        MOV ACC, CTE
+        TMP_Q_ADDR
+        MOV DPTR, ACC 
+        MOV ACC, [DPTR]             ; ACC = TMP_Q
+
+        MOV A, ACC                  ; A = TMP_Q
+
+        MOV ACC, CTE
+        0x80                        ; ACC = 10000000
+
+        ADD ACC, A                  ; ACC = TMP_Q + 0x80
+                                    ; equivalente a TMP_Q OR 0x80
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        TMP_Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; TMP_Q actualizado
+
+
+STORE_Q:
+        ; ----------------------------------------------------
+        ; Q = TMP_Q      (guardar Q)
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        TMP_Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = TMP_Q
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; Q = TMP_Q
+
+
+        ; ----------------------------------------------------
+        ; 4. RH7 = RH AND 0x80 (filtro bit mas significativo)
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = RH
+
+        MOV A, ACC                  ; A = RH
+
+        MOV ACC, CTE
+        0x80                        ; ACC = 10000000
+
+        AND ACC, A                  ; ACC = RH AND 10000000
+                                    ; ACC = RH7
+
+        MOV A, ACC                  ; A = RH7
+
+        MOV ACC, CTE
+        RH_SIGN_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; RH_SIGN = RH7
+
+
+        ; ----------------------------------------------------
+        ; 5. TMP_RH = RH >> 1
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = RH
+
+        SLR ACC                     ; ACC = RH >> 1
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        TMP_RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; TMP_RH = RH >> 1
+        ; ----------------------------------------------------
+        ; Si RH7 = 1, entonces RH = RH OR 0x80
+        ; En código: TMP_RH = TMP_RH + 0x80
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        RH_SIGN_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = RH7
+
+        MOV A, ACC
+        AND ACC, A                  ; actualiza bandera Z
+
+        JZ STORE_RH                 ; si RH7 = 0, no restaura signo
+
+
+        MOV ACC, CTE
+        TMP_RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = TMP_RH
+
+        MOV A, ACC                  ; A = TMP_RH
+
+        MOV ACC, CTE
+        0x80                        ; ACC = 10000000
+
+        ADD ACC, A                  ; ACC = TMP_RH + 0x80
+                                    ; equivalente a TMP_RH OR 0x80
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        TMP_RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; TMP_RH actualizado
+
+
+STORE_RH:
+        ; ----------------------------------------------------
+        ; RH = TMP_RH
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        TMP_RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = TMP_RH
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        RH_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; RH = TMP_RH
+        ; ----------------------------------------------------
+        ; 6. Count = Count - 1
+        ; N = N - 1
+        ; ----------------------------------------------------
+        MOV ACC, CTE
+        N_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = N
+
+        MOV A, ACC                  ; A = N
+
+        MOV ACC, CTE
+        0xFF                        ; ACC = -1
+
+        ADD ACC, A                  ; ACC = N - 1
+
+        JZ END_MULT                 ; si N llegó a 0, termina
+
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        N_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; N = N - 1
+
+        JMP LOOP
+
+
+; ============================================================
+; FIN
+; RH ya tiene parte alta
+; Q ya tiene parte baja
+; RL = Q
+; ============================================================
+
+END_MULT:
+        MOV ACC, CTE
+        Q_ADDR
+        MOV DPTR, ACC
+        MOV ACC, [DPTR]             ; ACC = Q
+
+        MOV A, ACC
+
+        MOV ACC, CTE
+        RL_ADDR
+        MOV DPTR, ACC
+        MOV ACC, A
+        MOV [DPTR], ACC             ; RL = Q
+
+
+FIN:
+        JMP FIN
+
+
+; ============================================================
+; DIRECCIONES RAM
+; ============================================================
+
+M_ADDR:         0x10
+Q_ADDR:         0x11
+Q1_ADDR:        0x12
+N_ADDR:         0x13
+RH_ADDR:        0x14
+RL_ADDR:        0x15
+
+Q0_ADDR:        0x16
+RH_LSB_ADDR:    0x17
+RH_SIGN_ADDR:   0x18
+TMP_Q_ADDR:     0x19
+TMP_RH_ADDR:    0x1A
